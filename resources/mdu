@@ -1,0 +1,2 @@
+#!/bin/sh
+java -jar ~/sysdev/bin/mdu.jar
