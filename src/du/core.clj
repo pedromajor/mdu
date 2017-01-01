@@ -3,6 +3,7 @@
   (:require [clojure.java.shell :refer [sh]]
             [clojure.pprint :refer [cl-format]]
             [clojure.string :as str]
+            [clojure.tools.cli :refer [parse-opts]]
             [jansi-clj.core :refer :all]))
 
 (declare formatizer)
@@ -57,21 +58,22 @@
           %)
        xs))
 
-(defn parse-df-output [out]
-  (->> out
-       :out
-       str/split-lines
-       (map str/trim)
-       (map #(str/split % #"\t" ))
-       ((fn [x]
-          (let [max-pad (min hfs-max-name (apply max (map (comp count second) x)))]
-            (map #(vector (-> %1 first
-                              (formatizer :pad 4 :align :left))
-                          (-> %1 second (str/split #"/") last
-                              (formatizer :pad max-pad :align :right)
-                              (truncate-name max-pad)))
-                 x))))
-       (sort-by (comp si->int first) >)))
+(defn parse-df-output
+  ([out] (parse-df-output hfs-max-name out))
+  ([short out]
+   (->> (:out out)
+        str/split-lines
+        (map str/trim)
+        (map #(str/split % #"\t" ))
+        ((fn [x]
+           (let [max-pad (min short (apply max (map (comp count second) x)))]
+             (map #(vector (-> %1 first
+                               (formatizer :pad 4 :align :left))
+                           (-> %1 second (str/split #"/") last
+                               (formatizer :pad max-pad :align :right)
+                               (truncate-name max-pad)))
+                  x))))
+        (sort-by (comp si->int first) >))))
 
 (defn formatizer [s & {:keys [pad align] :or {pad 0 align :right}}]
   (cl-format nil (str "~" pad (if (= :right align) "@") "a") s))
@@ -108,20 +110,30 @@
 (defn not-zero? [x]
   (-> x first extract-num (= 0) not))
 
-(defn print-the-fukr? [x]
+(defn flat-print [x]
   (->> x
        (map (comp
               println
               (partial reduce str)
               (partial map print-str)))))
 
+(def cli-options
+  [["-c" "--col COLUMNS" "Number of columns"
+    :default 4
+    :parse-fn #(Integer/parseInt %)
+    :validate [#(< 0 % 30) "bad columns number"]]
+   ["-s" "--short"]])
+
 (defn -main [& args]
-  (doall (->> args
-              first
-              df
-              parse-df-output
-              (filter not-zero?)
-              inject-color
-              (split-lc 4 :columns)
-              print-the-fukr?))
+  (let [{:keys [options arguments summary errors]}
+         (parse-opts args cli-options)]
+    (doall (->>
+             arguments
+             first
+             df
+             (parse-df-output (if (:short options) 10))
+             (filter not-zero?)
+             inject-color
+             (split-lc (:col options) :columns)
+             flat-print)))
   (System/exit 0))
