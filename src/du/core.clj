@@ -9,7 +9,7 @@
 (declare formatizer)
 
 (defonce si-units (map keyword '[B K M G]))
-(defonce hfs-max-name 31)
+(defonce hfs-max-name 20)
 
 (def si-map
   (zipmap
@@ -59,7 +59,6 @@
        xs))
 
 (defn parse-df-output
-  ([out] (parse-df-output hfs-max-name out))
   ([short out]
    (->> (:out out)
         str/split-lines
@@ -127,11 +126,10 @@
 (defn -main [& args]
   (let [{:keys [options arguments summary errors]}
          (parse-opts args cli-options)]
-    (doall (->>
-             arguments
+    (doall (->> arguments
              first
              df
-             (parse-df-output (if (:short options) 10))
+             (parse-df-output (if (:short options) 10 hfs-max-name))
              (filter not-zero?)
              inject-color
              (split-lc (:col options) :columns)
